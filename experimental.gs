@@ -1,4 +1,96 @@
 /***
+ * Lazy test setup for a collection of notebooks
+ */
+function generateNotebookSet()
+{
+  //define notebooks  
+  var nb_arr = [];
+  nb_arr.push(new Notebook("Microprosessors II and Embedded Systems", "Micro II_Notebook", "Microprosessors II and Embedded Systems", DriveApp.getRootFolder().getId(), "", "", "") );
+  nb_arr.push(new Notebook("Capstone", "Capstone_Notebook", "Capstone", DriveApp.getRootFolder().getId(), "", "", ""));
+  nb_arr.push(new Notebook("Network Design, Principals, Protocols and Applications", "Network_Notebook", "Network Design, Principals, Protocols and Applications", DriveApp.getRootFolder().getId(), "", "", ""));
+  nb_arr.push(new Notebook("Software Engineering", "Software Engineering_Notebook", "Software Engineering", DriveApp.getRootFolder().getId(), "", "", ""));
+  
+  //make in drive & save properties to user
+  while(nb_arr.length != 0)
+  {
+    var newBook = makeNewNotebookTree(nb_arr.pop(),  DriveApp.getRootFolder().getId());
+    newBook = makeNewMasterNotebook(newBook,0,0);
+    var props = PropertiesService.getUserProperties();
+    props.setProperty(newBook.iD, JSON.stringify(newBook)); //get back with JSON.parse()
+    //props.setProperty("CurrentNotebook", newBook.iD); // this one messed me up
+  }
+}
+
+function deleteAllProperties()
+{
+  PropertiesService.getUserProperties().deleteAllProperties();
+}
+
+/***
+ * Make an entry for every notebook
+ */
+function makeAllEntriesN()
+{
+  var props = PropertiesService.getUserProperties();
+  var keys = props.getKeys();
+  
+  while(keys.length != 0)
+  {
+    var newKey = keys.pop();
+    var debug = props.getProperty(newKey)
+    Logger.log(debug);
+    var bk = JSON.parse(debug);
+    makeNewEntryN(bk);
+  }
+}
+
+/***
+ * Make an summary for each notebook
+ */
+function makeAllSummariesN()
+{
+  var props = PropertiesService.getUserProperties();
+  var keys = props.getKeys();
+  
+  while(keys.length != 0)
+  {
+    var bk = JSON.parse(props.getProperty(keys.pop()));
+    makeNewSummaryN(bk);
+  }
+}
+
+/***
+ * Make an summary for each notebook
+ */
+function globAllSummariesN()
+{
+  var props = PropertiesService.getUserProperties();
+  var keys = props.getKeys();
+  
+  while(keys.length != 0)
+  {
+    var bk = JSON.parse(props.getProperty(keys.pop()));
+    globWeeklyEntriesN(bk);
+  }
+}
+
+/***
+ * Send summary emails for each notebook
+ */
+function sendAllTODON()
+{
+  var props = PropertiesService.getUserProperties();
+  var keys = props.getKeys();
+  
+  while(keys.length != 0)
+  {
+    var bk = JSON.parse(props.getProperty(keys.pop()));
+    highlightTODON(bk); 
+  }
+}
+
+
+/***
  * Make a new entry in the given notebook
  */
 function makeNewEntryN(notebook) {
@@ -24,7 +116,7 @@ function makeNewEntryN(notebook) {
 /**********************************************************************************
  * Creates a new glob summary entry
  */
-function makeNewSummaryN(notebook) {
+function makeNewSummaryN(notebook){
   //Create new file 
   var myDate = new Date();                                 //(v) fix 0 indexed month
   var title = myDate.getYear().toString() + "_" + (myDate.getMonth() + 1).toString() + "_" + myDate.getDate().toString() + "_Summary";
@@ -149,6 +241,7 @@ function globWeeklyEntriesN(notebook){
  * pull from master notebook too
  */
 function highlightTODON(notebook){
+  //TODO make this prettier for many notebooks by making highlightTODO just return a portion of the mail body without actually sending it
   var todoList = [];
   var masterTodos = [];
   var email = Session.getActiveUser().getEmail();
@@ -255,7 +348,7 @@ function testMoveFile()
 
 //pass
 //  It doesn't do list items quiiiiiite perfectly, but its close enough for me bc i don't need fancy dots in something i'll read twice
-function testConcatDocs()
+function test_ConcatDocs()
 {
   var c_base = DocumentApp.openById(DriveApp.getFilesByName("Concat Base").next().getId());
   var c_next =  DocumentApp.openById(DriveApp.getFilesByName("Concat Test").next().getId());
@@ -264,7 +357,7 @@ function testConcatDocs()
   
 }
 //pass
-function testMakeNewMasterNotebook()
+function test_MakeNewMasterNotebook()
 {
   var d = new Date(); 
   
@@ -284,7 +377,7 @@ function testMakeNewMasterNotebook()
 }
 
 //pass
-function testExtractHeading()
+function test_ExtractHeading()
 {
   var doc = DocumentApp.openById(DriveApp.getFilesByName('Test_Doc').next().getId());
   var body = doc.getBody();
@@ -307,7 +400,7 @@ function testExtractHeading()
 }
 
 //pass
-function testExtractTitle()
+function test_ExtractTitle()
 {
   var doc = DocumentApp.openById(DriveApp.getFilesByName('Test_Doc').next().getId());
   

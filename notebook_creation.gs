@@ -1,21 +1,16 @@
 //TODO I also should keep old summaries and make some way so that master can be regenerated completely from the Old folder
 
 /*****************************************************************************
- * Add a new notebook to this drive
+ * Add a new notebook to this drive (only works as add-on)
  */ 
 function addNewNotebook()
 {
   var ui = DocumentApp.getUi();
-  ui.alert("To create a notebook, we're going to need the following settings:\
- " +
-           " + short title \
-" +
-           " + long title (Optional. Default is to copy the short title's value over) \
-" +
-           " + pick the directory to create your notebook in. (not implemented, just creates in root rn.)\
-" +
-           " + pick a cover image (upload, select existing image, or leave it blank) \
-");
+  ui.alert("To create a notebook, we're going to need the following settings:\n" +
+           " + short title \n" +
+           " + long title (Optional. Default is to copy the short title's value over) \n" +
+           " + pick the directory to create your notebook in. (not implemented, just creates in root rn.)\n" +
+           " + pick a cover image (upload, select existing image, or leave it blank) \n");
            
   var shortName = ui.prompt("Enter short name of your notebook", ui.ButtonSet.OK);
   var longName = ui.prompt("Enter long name of your notebook (Optional)", ui.ButtonSet.OK_CANCEL);
@@ -28,9 +23,11 @@ function addNewNotebook()
   newBook = makeNewMasterNotebook(newBook,0,0);
   //save for later
   var props = PropertiesService.getUserProperties();
-  props.setProperty(newBook.iD, JSON.stringify(newBook)); //get back with JSON.parse()
+  props.setProperty(newBook.iD, JSON.stringify(newBook)); 
   props.setProperty("CurrentNotebook", newBook.iD);
-    
+  //TODO need to store notebooks in a list of notebooks
+  //TODO make a function to add a notebook to the list
+  //
 }
 /*****************************************************************************
  * Notebook object constructor
@@ -49,12 +46,12 @@ function Notebook(iD, shortName, longName, rootFolderId, masterNotebookId, oldFo
  * Creates a new notebook tree structure and returns the root folder
  * tested
  */
-function makeNewNotebookTree(notebook, folderIdToMakeItIn) {
+function makeNewNotebookTree(notebook, folderIdToMakeItInID) {
   //validate
   notebook.shortName =  notebook.shortName || "Notebook";
-  folderIdToMakeItIn =  folderIdToMakeItIn ||  DriveApp.getRootFolder();
+  folderIdToMakeItInID =  folderIdToMakeItInID ||  DriveApp.getRootFolder().getId();
   
-  var inFolder = DriveApp.getFolderById(folderIdToMakeItIn);
+  var inFolder = DriveApp.getFolderById(folderIdToMakeItInID);
   //Create new folder structure
   //root
   // |--<enotebookName
