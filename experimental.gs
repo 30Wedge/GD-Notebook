@@ -1,0 +1,319 @@
+/***
+ * Make a new entry in the given notebook
+ */
+function makeNewEntryN(notebook) {
+  //Create new file 
+  var myDate = new Date();             
+  var myDayString = myDate.getDate().toString();
+  if(myDayString.length == 1) //make day always 2 chars wide
+    myDayString = "0" + myDayString;       
+                                                           //(v) fix 0 indexed month
+  var dateString = myDate.getYear().toString() + "_" + (myDate.getMonth() + 1).toString() + "_" + myDayString;
+  var doc = DocumentApp.create(dateString); //this is supposed to be fine.
+  
+  //Add a header
+  doc.addHeader().appendParagraph(notebook.longName + "\n" + dateString);
+  
+  //Break here; examine the doc, there is nothing written.
+  var x = DriveApp.getFolderById(notebook.rootFolderId).getName(); //DEBUG
+  
+  //move to notebook folder from root
+  moveFile(DriveApp.getFileById(doc.getId()), DriveApp.getFolderById(notebook.rootFolderId));
+}
+
+/**********************************************************************************
+ * Creates a new glob summary entry
+ */
+function makeNewSummaryN(notebook) {
+  //Create new file 
+  var myDate = new Date();                                 //(v) fix 0 indexed month
+  var title = myDate.getYear().toString() + "_" + (myDate.getMonth() + 1).toString() + "_" + myDate.getDate().toString() + "_Summary";
+  var doc = DocumentApp.create(title);
+  
+  //create document content
+  doc.getBody().appendParagraph("#Insert a brief \u0026 detailed description of this week's work where indicated.\n" +
+                                "#Lines starting with '#' will be ignored.\n" +
+                                "#The first non-comment line is interpreted as your title:\n" +
+                                "Replace this with your title:\n\n" + 
+                                "#Everything else in the file is interpreted as a description\n\n" +
+                                "#Insert Description here \n");
+    
+  //move from root to notebook file
+  moveFile(DriveApp.getFileById(doc.getId()), DriveApp.getFolderById(notebook.rootFolderId));
+}
+
+/*****************************************************************************
+ * Call on Friday nights to glob all of the previous week's notes into one file then archive
+ */
+function globWeeklyEntriesN(notebook){
+  //get all the folders and files you need
+  var masterNotebook = DriveApp.getFileById(notebook.masterNotebookId);
+  var oldFolder = DriveApp.getFolderById(notebook.oldFolderId);
+  var notebookFolder = DriveApp.getFolderById(notebook.rootFolderId);
+  
+  ///open weekly summary
+  var searchResults = notebookFolder.searchFiles("title contains 'Summary'");
+  var summaryFile;
+  //! Here's where its tricky, because searchResults can return an 'empty object'
+  if(searchResults.hasNext()){ 
+    summaryFile = searchResults.next();
+  } else {
+    //no summary: no blob by removing summary
+    console.log("No summary found so blob abborted\n");
+    return 1;
+  }
+  
+  //find logs to glob
+  var logsToGlob = [];
+  var logs = notebookFolder.searchFiles("not (title contains 'Summary')");
+  while(logs.hasNext())
+    logsToGlob.push(logs.next());
+  
+  ///Convert all of the googleDrive files into Google docs
+  var masterNotebookDoc = DocumentApp.openById(masterNotebook.getId());
+  var summaryFileDoc = DocumentApp.openById(summaryFile.getId());
+  var logDocs = [];
+  for(var i = 0; i < logsToGlob.length; i++)
+    logDocs.push(DocumentApp.openById(logsToGlob[i].getId()));
+  logDocs = logDocs.reverse(); //Reverse to get it in alphabetical order (sounds jank)
+  
+  ///skim weekly summary for title and description
+  var summaryContents = summaryFileDoc.getBody().getText();
+  var cleanSummaryContents = "";
+  
+  //clean comment lines of summary \u0026 extract title
+  var summaryLines = summaryContents.split("\n");
+  var summaryTitle = "";
+  for(var i = 0; i < summaryLines.length; i++){
+    if(summaryLines[i].charAt(0) == "#"){
+      continue;
+    } else {
+      summaryLines[i].replace("\n", " ");
+      //set the first non-comment line to the title
+      if(!summaryTitle) {
+        summaryTitle = summaryLines[i];
+      } else {
+        cleanSummaryContents = cleanSummaryContents + (summaryLines[i] + "\n");
+      }
+    }
+  }
+  
+  //add a new week section to master w/ summary title \u0026 details
+  masterNotebookDoc.getBody().appendHorizontalRule();
+  
+  var weeklyHeader = masterNotebookDoc.getBody().appendParagraph(summaryFile.getName() + ": " + summaryTitle);
+  weeklyHeader.setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  
+  masterNotebookDoc.getBody().appendParagraph(cleanSummaryContents);
+  
+  ///for each log file in Notebook
+  for(var i = 0; i < logDocs.length; i++){
+    
+    //add a subsection to the master notebook
+    var title = logDocs[i].getName() + ": " + extractHeading(logDocs[i].getBody(), 
+                                                             DocumentApp.ParagraphHeading.TITLE, 
+                                                             false,
+                                                             true,
+                                                             DocumentApp.ParagraphHeading.NORMAL);
+    var dailyHeader = masterNotebookDoc.getBody().appendParagraph(title);
+    dailyHeader.setHeading(DocumentApp.ParagraphHeading.HEADING3);
+    
+    //sanitize daily log's headings to make appropriate subsections( assuming H1-<eH4, H2-<eH5 and H3-<eH4 )
+    extractHeading(logDocs[i].getBody(),DocumentApp.ParagraphHeading.HEADING1, 
+                                                             false,
+                                                             true,
+                                                             DocumentApp.ParagraphHeading.HEADING4);
+    extractHeading(logDocs[i].getBody(),DocumentApp.ParagraphHeading.HEADING2, 
+                                                             false,
+                                                             true,
+                                                             DocumentApp.ParagraphHeading.HEADING5);
+    extractHeading(logDocs[i].getBody(),DocumentApp.ParagraphHeading.HEADING3, 
+                                                             false,
+                                                             true,
+                                                             DocumentApp.ParagraphHeading.HEADING4);
+    //copy entry contents to subsection
+    concatDocs(masterNotebookDoc, logDocs[i]);
+    
+    //move all the old logs away
+    moveFile(logsToGlob[i], oldFolder, notebookFolder);
+  } // \\for each log
+  
+  //move all the summary file
+   moveFile(summaryFile, oldFolder, notebookFolder);
+}
+
+
+/****************************************************************************
+ * Pulls every line containing TODO from all notebook entries and....
+ * (sends an email?) in the morning detailing all of the todos..
+ * pull from master notebook too
+ */
+function highlightTODON(notebook){
+  var todoList = [];
+  var masterTodos = [];
+  var email = Session.getActiveUser().getEmail();
+  
+  //Exctract all paragraphs starting with TODO from current Notebook entries and whatever is in the master folder
+  var searchDirs = [DriveApp.getFolderById(notebook.rootFolderId), DriveApp.getFolderById(notebook.masterFolderId)];
+  //j = iterator for files in dir
+  var j;
+  for(var i = 0; i < searchDirs.length; i++){
+    var entry = searchDirs[i];
+    j = entry.searchFiles("");
+    while(j.hasNext()) {
+      var doc = DocumentApp.openById(j.next().getId());
+      var currentBody = doc.getBody();
+      var range = currentBody.findText("^TODO.*?$");
+      
+      while(range)
+      {
+        var myPar = range.getElement().asText().getText();
+        todoList.push([doc.getName(), myPar]);
+        range = currentBody.findText("^TODO.*?$", range);
+        Logger.log("From " + doc.getName() + "... " + myPar);
+      } // \\while searching all of j
+    } // \\while each doc in entry
+  }
+  
+  //compose them into an email if there is anything
+  if(todoList.length == 0&& masterTodos.length == 0)
+    return;
+  
+  var mailBody = "Daily TODO list from notebook: \n\n";
+  if(todoList.length < 0) {
+    for(var i = 0; i < todoList.length; i++) {
+      mailBody = mailBody.concat(todoList[i][0], ": ", todoList[i][1].replace("TODO", ""), "\n");
+    }
+  }
+  
+  if(masterTodos.length < 0) {    
+    mailBody = mailBody.concat("\n----\n");
+    for(var i = 0; i < masterTodos.length; i++) {
+      mailBody = mailBody.concat("M: ", masterTodos[i].replace("TODO", ""), "\n");
+    }
+  }
+  
+  mailBody = mailBody.concat("\n\n-Sent automatically from Notebook: " + notebook.longname);  
+  MailApp.sendEmail(email, 
+                    "TODO summary", 
+                    mailBody);
+}
+
+
+
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////Below be tests//////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+/* tests all of the functions with an N postfix 
+ * I'm lazy, so I'm commenting in/out lines as I want them and lookinga t object values in the debugger.*/
+function test_notebookSuite()
+{
+  //make test notebook structure n.                                  // V V V TODO, fill with auto values if it is already generated, make the next 2 lines conditional
+  var n = new Notebook(1, "test_Book", "Things for the test folder", 0, 0, 0, 0);
+  n = makeNewNotebookTree(n, DriveApp.getRootFolder().getId()); //pass
+  n = makeNewMasterNotebook(n, 0, "Testamungous"); //pass (didn't test image yet)
+  
+  makeNewEntryN(n); //pass
+  makeNewSummaryN(n); //pass
+  highlightTODON(n); //pass (Enough)
+  globWeeklyEntriesN(n);
+  
+}
+
+//ez pass first time
+function testMoveFile()
+{
+  var fold1 = DriveApp.createFolder("fold1");
+  var fold2 = DriveApp.createFolder("fold2");
+  var file1 = DriveApp.createFile("file1", "test for moveFile");
+  var file2 = DriveApp.createFile("file2", "test for moveFile");
+  
+  moveFile(file1, fold1);
+  moveFile(file2, fold2);
+  
+  try{
+    moveFile(0, fold2, fold1);
+  } catch(err) {
+    Logger.log("Expected Err: " + err);
+  }
+  
+  try{
+    moveFile(file1, 0, fold1);
+  } catch(err) {
+    Logger.log("Expected Err: " + err);
+  }
+  
+  moveFile(file1, fold2, fold1);
+  moveFile(file2, fold1, fold2);
+}
+
+//pass
+//  It doesn't do list items quiiiiiite perfectly, but its close enough for me bc i don't need fancy dots in something i'll read twice
+function testConcatDocs()
+{
+  var c_base = DocumentApp.openById(DriveApp.getFilesByName("Concat Base").next().getId());
+  var c_next =  DocumentApp.openById(DriveApp.getFilesByName("Concat Test").next().getId());
+  
+  concatDocs(c_base, c_next);
+  
+}
+//pass
+function testMakeNewMasterNotebook()
+{
+  var d = new Date(); 
+  
+  /*Make one in root*/
+  var root = DriveApp.getRootFolder();
+  var nameRoot = "ATestNotebookInRoot" + d.getMilliseconds();
+  var noteBlob = makeNewNotebookTree(nameRoot);
+
+  makeNewMasterNotebook(noteBlob["master"], nameRoot, "Something about Will Smith but I can't remember who he is", 0, "Jayden Smith");
+  
+  /*Make one in a folder*/
+  var nameOther = "ATestNotebookInOther" + d.getMilliseconds() + "_" + d.getMilliseconds();
+  var fol1 = root.createFolder(nameOther);
+  var noteBlob2 = makeNewNotebookTree(nameOther + nameRoot, fol1);
+  
+  makeNewMasterNotebook(noteBlob2["master"], nameOther, "less puns mo code");
+}
+
+//pass
+function testExtractHeading()
+{
+  var doc = DocumentApp.openById(DriveApp.getFilesByName('Test_Doc').next().getId());
+  var body = doc.getBody();
+  
+  Logger.log("Extract one Title, no replace");
+  var title = extractHeading(body,DocumentApp.ParagraphHeading.HEADING1,0,0, false);
+  Logger.log(title);
+  
+  Logger.log("Extract all normals, replace with h2");
+  var h2 = extractHeading(body, DocumentApp.ParagraphHeading.NORMAL, true, true, DocumentApp.ParagraphHeading.HEADING2);
+  Logger.log(h2.length);
+  
+  Logger.log("return first H2s, replace with title");
+  var firstH2 = extractHeading(body, DocumentApp.ParagraphHeading.HEADING2, false, true, DocumentApp.ParagraphHeading.HEADING1);
+  Logger.log(firstH2);
+  
+  Logger.log("Using all default arguments");
+  var title = extractHeading(body);
+  Logger.log(title);
+}
+
+//pass
+function testExtractTitle()
+{
+  var doc = DocumentApp.openById(DriveApp.getFilesByName('Test_Doc').next().getId());
+  
+  var body = doc.getBody();
+  
+  var title = extractTitle(body);
+  
+  Logger.log(title);
+}
