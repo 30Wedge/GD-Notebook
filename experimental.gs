@@ -9,6 +9,7 @@ function generateNotebookSet()
   nb_arr.push(new Notebook("Capstone", "Capstone_Notebook", "Capstone", DriveApp.getRootFolder().getId(), "", "", ""));
   nb_arr.push(new Notebook("Network Design, Principals, Protocols and Applications", "Network_Notebook", "Network Design, Principals, Protocols and Applications", DriveApp.getRootFolder().getId(), "", "", ""));
   nb_arr.push(new Notebook("Software Engineering", "Software Engineering_Notebook", "Software Engineering", DriveApp.getRootFolder().getId(), "", "", ""));
+  nb_arr.push(new Notebook("GATK research", "GATK Research_Notebook", "GATK reserach with ACANETS", DriveApp.getRootFolder().getId(), "", "", ""));
   
   //make in drive & save properties to user
   while(nb_arr.length != 0)
@@ -21,6 +22,14 @@ function generateNotebookSet()
   }
 }
 
+function bandAidAdd()
+{
+  var x = new Notebook("GATK research", "GATK Research_Notebook", "GATK reserach with ACANETS", DriveApp.getRootFolder().getId(), "", "", "");
+  x = makeNewNotebookTree(x, DriveApp.getRootFolder().getId());
+  x = makeNewMasterNotebook(x, 0, 0);
+  var p = PropertiesService.getUserProperties();
+  p.setProperty(x.iD, JSON.stringify(x));
+}
 function deleteAllProperties()
 {
   PropertiesService.getUserProperties().deleteAllProperties();
@@ -82,13 +91,20 @@ function sendAllTODON()
   var props = PropertiesService.getUserProperties();
   var keys = props.getKeys();
   
+  var email = Session.getActiveUser().getEmail();
+  var body = "TODO summary from notebooks: \n\n";
+  
   while(keys.length != 0)
   {
     var bk = JSON.parse(props.getProperty(keys.pop()));
-    highlightTODON(bk); 
+    var chunk = highlightTODON(bk);
+    body = body.concat(chunk);
   }
+  
+  MailApp.sendEmail(email, 
+                  "TODO summary", 
+                  body);
 }
-
 
 /***
  * Make a new entry in the given notebook
@@ -150,7 +166,6 @@ function globWeeklyEntriesN(notebook){
   if(searchResults.hasNext()){ 
     summaryFile = searchResults.next();
   } else {
-    //no summary: no blob by removing summary
     console.log("No summary found so blob abborted\n");
     return 1;
   }
@@ -234,17 +249,14 @@ function globWeeklyEntriesN(notebook){
    moveFile(summaryFile, oldFolder, notebookFolder);
 }
 
-
 /****************************************************************************
  * Pulls every line containing TODO from all notebook entries and....
  * (sends an email?) in the morning detailing all of the todos..
  * pull from master notebook too
  */
 function highlightTODON(notebook){
-  //TODO make this prettier for many notebooks by making highlightTODO just return a portion of the mail body without actually sending it
   var todoList = [];
   var masterTodos = [];
-  var email = Session.getActiveUser().getEmail();
   
   //Exctract all paragraphs starting with TODO from current Notebook entries and whatever is in the master folder
   var searchDirs = [DriveApp.getFolderById(notebook.rootFolderId), DriveApp.getFolderById(notebook.masterFolderId)];
@@ -270,26 +282,24 @@ function highlightTODON(notebook){
   
   //compose them into an email if there is anything
   if(todoList.length == 0&& masterTodos.length == 0)
-    return;
+    return "";
   
-  var mailBody = "Daily TODO list from notebook: \n\n";
-  if(todoList.length < 0) {
+  var bodyChunk = "Notebook --- " + notebook.longName + '\n';
+  if(todoList.length > 0) {
     for(var i = 0; i < todoList.length; i++) {
-      mailBody = mailBody.concat(todoList[i][0], ": ", todoList[i][1].replace("TODO", ""), "\n");
+      bodyChunk = bodyChunk.concat(todoList[i][0], ": ", todoList[i][1].replace("TODO", ""), "\n");
     }
   }
   
-  if(masterTodos.length < 0) {    
-    mailBody = mailBody.concat("\n----\n");
+  if(masterTodos.length > 0) {    
+    bodyChunk = bodyChunk.concat("\n----\n");
     for(var i = 0; i < masterTodos.length; i++) {
-      mailBody = mailBody.concat("M: ", masterTodos[i].replace("TODO", ""), "\n");
+      bodyChunk = bodyChunk.concat("M: ", masterTodos[i].replace("TODO", ""), "\n");
     }
   }
   
-  mailBody = mailBody.concat("\n\n-Sent automatically from Notebook: " + notebook.longname);  
-  MailApp.sendEmail(email, 
-                    "TODO summary", 
-                    mailBody);
+  bodyChunk = bodyChunk.concat("\n\n");  
+  return bodyChunk;
 }
 
 
