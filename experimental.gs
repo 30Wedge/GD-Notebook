@@ -47,24 +47,9 @@ function makeAllEntriesN()
   {
     var newKey = keys.pop();
     var debug = props.getProperty(newKey)
-    Logger.log(debug);
+    Logger.log(newKey + ": " +debug);
     var bk = JSON.parse(debug);
     makeNewEntryN(bk);
-  }
-}
-
-/***
- * Make an summary for each notebook
- */
-function makeAllSummariesN()
-{
-  var props = PropertiesService.getUserProperties();
-  var keys = props.getKeys();
-  
-  while(keys.length != 0)
-  {
-    var bk = JSON.parse(props.getProperty(keys.pop()));
-    makeNewSummaryN(bk);
   }
 }
 
@@ -79,6 +64,7 @@ function globAllSummariesN()
   while(keys.length != 0)
   {
     var bk = JSON.parse(props.getProperty(keys.pop()));
+    Logger.log(JSON.stringify(bk) + "\n");
     globWeeklyEntriesN(bk);
   }
 }
@@ -129,27 +115,6 @@ function makeNewEntryN(notebook) {
   moveFile(DriveApp.getFileById(doc.getId()), DriveApp.getFolderById(notebook.rootFolderId));
 }
 
-/**********************************************************************************
- * Creates a new glob summary entry
- */
-function makeNewSummaryN(notebook){
-  //Create new file 
-  var myDate = new Date();                                 //(v) fix 0 indexed month
-  var title = myDate.getYear().toString() + "_" + (myDate.getMonth() + 1).toString() + "_" + myDate.getDate().toString() + "_Summary";
-  var doc = DocumentApp.create(title);
-  
-  //create document content
-  doc.getBody().appendParagraph("#Insert a brief \u0026 detailed description of this week's work where indicated.\n" +
-                                "#Lines starting with '#' will be ignored.\n" +
-                                "#The first non-comment line is interpreted as your title:\n" +
-                                "Replace this with your title:\n\n" + 
-                                "#Everything else in the file is interpreted as a description\n\n" +
-                                "#Insert Description here \n");
-    
-  //move from root to notebook file
-  moveFile(DriveApp.getFileById(doc.getId()), DriveApp.getFolderById(notebook.rootFolderId));
-}
-
 /*****************************************************************************
  * Call on Friday nights to glob all of the previous week's notes into one file then archive
  */
@@ -159,59 +124,21 @@ function globWeeklyEntriesN(notebook){
   var oldFolder = DriveApp.getFolderById(notebook.oldFolderId);
   var notebookFolder = DriveApp.getFolderById(notebook.rootFolderId);
   
-  ///open weekly summary
-  var searchResults = notebookFolder.searchFiles("title contains 'Summary'");
-  var summaryFile;
-  //! Here's where its tricky, because searchResults can return an 'empty object'
-  if(searchResults.hasNext()){ 
-    summaryFile = searchResults.next();
-  } else {
-    console.log("No summary found so blob abborted\n");
-    return 1;
-  }
-  
   //find logs to glob
   var logsToGlob = [];
-  var logs = notebookFolder.searchFiles("not (title contains 'Summary')");
+  var logs = notebookFolder.getFiles();
   while(logs.hasNext())
     logsToGlob.push(logs.next());
   
   ///Convert all of the googleDrive files into Google docs
   var masterNotebookDoc = DocumentApp.openById(masterNotebook.getId());
-  var summaryFileDoc = DocumentApp.openById(summaryFile.getId());
   var logDocs = [];
   for(var i = 0; i < logsToGlob.length; i++)
     logDocs.push(DocumentApp.openById(logsToGlob[i].getId()));
-  logDocs = logDocs.reverse(); //Reverse to get it in alphabetical order (sounds jank)
-  
-  ///skim weekly summary for title and description
-  var summaryContents = summaryFileDoc.getBody().getText();
-  var cleanSummaryContents = "";
-  
-  //clean comment lines of summary \u0026 extract title
-  var summaryLines = summaryContents.split("\n");
-  var summaryTitle = "";
-  for(var i = 0; i < summaryLines.length; i++){
-    if(summaryLines[i].charAt(0) == "#"){
-      continue;
-    } else {
-      summaryLines[i].replace("\n", " ");
-      //set the first non-comment line to the title
-      if(!summaryTitle) {
-        summaryTitle = summaryLines[i];
-      } else {
-        cleanSummaryContents = cleanSummaryContents + (summaryLines[i] + "\n");
-      }
-    }
-  }
+  logDocs = logDocs.reverse(); //Reverse to get it in alphanumerical order (yes it is jank)
   
   //add a new week section to master w/ summary title \u0026 details
   masterNotebookDoc.getBody().appendHorizontalRule();
-  
-  var weeklyHeader = masterNotebookDoc.getBody().appendParagraph(summaryFile.getName() + ": " + summaryTitle);
-  weeklyHeader.setHeading(DocumentApp.ParagraphHeading.HEADING2);
-  
-  masterNotebookDoc.getBody().appendParagraph(cleanSummaryContents);
   
   ///for each log file in Notebook
   for(var i = 0; i < logDocs.length; i++){
@@ -244,9 +171,6 @@ function globWeeklyEntriesN(notebook){
     //move all the old logs away
     moveFile(logsToGlob[i], oldFolder, notebookFolder);
   } // \\for each log
-  
-  //move all the summary file
-   moveFile(summaryFile, oldFolder, notebookFolder);
 }
 
 /****************************************************************************
