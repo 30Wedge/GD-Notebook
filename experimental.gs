@@ -150,21 +150,21 @@ function globWeeklyEntriesN(notebook){
                                                              true,
                                                              DocumentApp.ParagraphHeading.NORMAL);
     var dailyHeader = masterNotebookDoc.getBody().appendParagraph(title);
-    dailyHeader.setHeading(DocumentApp.ParagraphHeading.HEADING3);
+    dailyHeader.setHeading(DocumentApp.ParagraphHeading.HEADING2);
     
-    //sanitize daily log's headings to make appropriate subsections( assuming H1-<eH4, H2-<eH5 and H3-<eH4 )
+    //sanitize daily log's headings to make appropriate subsections( assuming H1-<eH3, H2-<eH4 and H3-<eH3 )
     extractHeading(logDocs[i].getBody(),DocumentApp.ParagraphHeading.HEADING1, 
                                                              false,
                                                              true,
-                                                             DocumentApp.ParagraphHeading.HEADING4);
+                                                             DocumentApp.ParagraphHeading.HEADING3);
     extractHeading(logDocs[i].getBody(),DocumentApp.ParagraphHeading.HEADING2, 
                                                              false,
                                                              true,
-                                                             DocumentApp.ParagraphHeading.HEADING5);
+                                                             DocumentApp.ParagraphHeading.HEADING4);
     extractHeading(logDocs[i].getBody(),DocumentApp.ParagraphHeading.HEADING3, 
                                                              false,
                                                              true,
-                                                             DocumentApp.ParagraphHeading.HEADING4);
+                                                             DocumentApp.ParagraphHeading.HEADING3);
     //copy entry contents to subsection
     concatDocs(masterNotebookDoc, logDocs[i]);
     
